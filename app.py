@@ -2,68 +2,106 @@ import streamlit as st
 from fpdf import FPDF
 from datetime import datetime
 import os
+import time
 
-# إعداد واجهة البرنامج
-st.set_page_config(page_title="SparkFlow | تقارير Kids Gate", page_icon="📝")
+# إعداد واجهة المستخدم (Professional & Minimal)
+st.set_page_config(page_title="SparkFlow Pro | Kids Gate", page_icon="✨", layout="centered")
 
+# تنسيق بسيط ومريح للعين
+st.markdown("""
+    <style>
+    .stApp { background-color: #F9FBFF; }
+    .stButton>button { border-radius: 20px; background: #4A90E2; color: white; border: none; }
+    .urgent-task { color: #E74C3C; font-weight: bold; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# إدارة الحالة (Session State)
 if 'tasks' not in st.session_state:
     st.session_state.tasks = []
 
-st.title("📝 صانع التقرير الأسبوعي الذكي")
-st.info("سيتم طباعة مهامك مباشرة فوق تصميم Kids Gate الخاص بكِ.")
+# ترويسة الموقع
+st.title("🚀 SparkFlow Pro")
+st.write("مساعدكِ الذكي لتنظيم المهام وإصدار تقارير Kids Gate.")
 
-# --- منطقة إدخال المهام ---
-with st.form("task_form"):
-    task = st.text_input("المهمة المنجزة:")
-    submitted = st.form_submit_button("إضافة للمسودة")
-    if submitted and task:
-        st.session_state.tasks.append(task)
+# --- منطقة الإدخال ---
+with st.container():
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        task_text = st.text_input("ما هو إنجازك الجديد؟", placeholder="اكتبي هنا...")
+    with col2:
+        is_urgent = st.toggle("مهمة عاجلة 🔥")
+    
+    if st.button("إضافة للمفكرة ✨"):
+        if task_text:
+            st.session_state.tasks.append({
+                "task": task_text,
+                "urgent": is_urgent,
+                "status": "pending",
+                "time": datetime.now().strftime("%I:%M %p"),
+                "last_notified": time.time()
+            })
+            st.success("تمت الإضافة!")
+            st.rerun()
 
-# عرض المهام الحالية
-if st.session_state.tasks:
-    st.write("### إنجازاتك لهذا الأسبوع:")
-    for i, t in enumerate(st.session_state.tasks):
-        st.write(f"{i+1}. {t}")
+st.divider()
 
-# --- وظيفة صناعة الـ PDF فوق الخلفية ---
-def export_to_pdf(tasks):
+# --- التنبيهات اللحوحة للمهام العاجلة ---
+for t in st.session_state.tasks:
+    if t['urgent'] and t['status'] == "pending":
+        # تنبيه كل دقيقة إذا لم تنجز
+        if time.time() - t['last_notified'] > 60:
+            st.toast(f"⚠️ تذكير: هل انتهيتِ من: {t['task']}؟", icon="🔥")
+            t['last_notified'] = time.time()
+
+# --- عرض المهام ---
+st.subheader("📋 قائمة الإنجازات الحالية")
+for i, t in enumerate(st.session_state.tasks):
+    if t['status'] == "pending":
+        c1, c2 = st.columns([4, 1])
+        prefix = "🔥 " if t['urgent'] else "📍 "
+        c1.write(f"{prefix} {t['task']}")
+        if c2.button("تم ✅", key=f"done_{i}"):
+            st.session_state.tasks[i]['status'] = "done"
+            st.balloons()
+            st.rerun()
+
+# --- وظيفة إصدار الـ PDF فوق صورتك ---
+def create_report(done_tasks):
     pdf = FPDF()
     pdf.add_page()
     
-    # 1. وضع صورة الخلفية (التصميم الخاص بكِ)
-    # تأكدي أن اسم الملف في GitHub مطابق تماماً لهذا الاسم
-    bg_path = "1000193814.png"
-    if os.path.exists(bg_path):
-        pdf.image(bg_path, x=0, y=0, w=210, h=297) # مقاس A4 كامل
+    # وضع صورتك كخلفية (يجب أن تكون في GitHub بنفس الاسم)
+    img_path = "1000193814.png"
+    if os.path.exists(img_path):
+        pdf.image(img_path, x=0, y=0, w=210, h=297)
     
-    # 2. إعدادات النص (الإحداثيات للبدء بالكتابة في المنطقة البيضاء)
+    # إعدادات النص (الكتابة فوق المنطقة البيضاء)
     pdf.set_font("Arial", size=14)
-    pdf.set_text_color(50, 50, 50)
+    pdf.set_text_color(60, 60, 60)
     
-    # البدء بالكتابة من ارتفاع مناسب (بعد ترويسة التصميم)
-    y_position = 100 
-    
-    for i, t in enumerate(tasks):
-        pdf.set_xy(30, y_position) # ترك مسافة من اليسار 30
-        pdf.multi_cell(150, 10, txt=f"- {t}", align='L')
-        y_position += 10 # ترك مسافة بين الأسطر
+    y_pos = 105 # البدء من منتصف الورقة تقريباً (المنطقة البيضاء)
+    for task in done_tasks:
+        pdf.set_xy(35, y_pos)
+        pdf.cell(0, 10, txt=f"- {task['task']}", ln=True)
+        y_pos += 12
         
-    return pdf.output(dest='S').encode('latin-1')
+    return pdf.output()
 
-# --- زر التحميل ---
+# --- قسم التحميل ---
 st.divider()
-if st.button("✨ إصدار التقرير النهائي (PDF)"):
-    if st.session_state.tasks:
+if st.button("🪄 توليد تقرير PDF الأسبوعي"):
+    completed = [t for t in st.session_state.tasks if t['status'] == "done"]
+    if completed:
         try:
-            pdf_bytes = export_to_pdf(st.session_state.tasks)
+            pdf_out = create_report(completed)
             st.download_button(
-                label="📥 تحميل الملف الآن",
-                data=pdf_bytes,
-                file_name=f"Weekly_Report_{datetime.now().strftime('%Y_%m_%d')}.pdf",
+                label="📥 تحميل التقرير جاهزاً",
+                data=bytes(pdf_out),
+                file_name=f"Weekly_Report_{datetime.now().strftime('%d_%m')}.pdf",
                 mime="application/pdf"
             )
-            st.success("تم دمج تقريرك مع التصميم بنجاح!")
         except Exception as e:
-            st.error(f"تأكدي من رفع صورة التصميم لـ GitHub بنفس الاسم. الخطأ: {e}")
+            st.error(f"تأكدي من رفع الصورة '1000193814.png' لـ GitHub. الخطأ: {e}")
     else:
-        st.warning("أضيفي بعض المهام أولاً!")
+        st.warning("أنجزي بعض المهام أولاً لتوليد التقرير!")
